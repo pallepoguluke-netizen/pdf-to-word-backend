@@ -1,49 +1,52 @@
 const express = require("express");
+const cors = require("cors");
 const multer = require("multer");
 const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
 const app = express();
+app.use(cors());
+
 const upload = multer({ dest: "uploads/" });
 
-app.post("/convert", upload.single("pdf"), (req, res) => {
+app.post("/convert", upload.single("file"), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send("No file uploaded");
+    }
+
     const pdfPath = req.file.path;
     const outputDocx = pdfPath + ".docx";
 
-    // LibreOffice command to convert PDF → DOCX
-    const command = `libreoffice --headless --convert-to docx --outdir uploads ${pdfPath}`;
+    const command = `soffice --headless --convert-to docx --outdir uploads ${pdfPath}`;
 
     exec(command, (error) => {
         if (error) {
-            console.error("Conversion Error:", error);
+            console.error("Conversion error:", error);
             return res.status(500).json({ success: false, message: "Conversion failed" });
         }
 
-        // Read the converted DOCX file
-        fs.readFile(outputDocx, (err, fileBuffer) => {
+        fs.readFile(outputDocx, (err, buffer) => {
             if (err) {
-                console.error("File Read Error:", err);
-                return res.status(500).json({ success: false, message: "Cannot read output file" });
+                console.error("File read error:", err);
+                return res.status(500).json({ success: false, message: "Cannot read converted file" });
             }
 
-            // Send DOCX file to client
             res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
             res.setHeader("Content-Disposition", "attachment; filename=converted.docx");
-            res.send(fileBuffer);
+            res.send(buffer);
 
-            // Cleanup
             fs.unlink(pdfPath, () => {});
             fs.unlink(outputDocx, () => {});
         });
     });
 });
 
-// Default route
 app.get("/", (req, res) => {
     res.send("PDF to Word Backend Running Successfully!");
 });
 
-app.listen(10000, () => {
-    console.log("Server running on port 10000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log("Server running on port", PORT);
 });
